@@ -1,0 +1,32 @@
+apply plugin: 'maven'
+apply plugin: 'idea'
+apply plugin: 'java'
+
+
+
+
+sourceCompatibility = 1.5
+version = '1.0'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    flatDir {
+        dirs 'libs'
+    }
+}
+
+task "create-dirs" << {
+    sourceSets*.java.srcDirs*.each { it.mkdirs() }
+    sourceSets*.resources.srcDirs*.each { it.mkdirs() }
+}
+
+dependencies {
+    compile (
+            'com.google.code.gson:gson:2.+',
+            fileTree(dir: 'libs' , include: '*.jar')
+    )
+    testCompile (
+            'junit:junit:4.11'
+    )
+}
