@@ -25,26 +25,56 @@ public class Test {
             String str = new String(txt,"UTF-8");
             long time = System.currentTimeMillis();
             Object obj=reader.read(str);
-            System.out.println("JSON:"+(System.currentTimeMillis()-time));
+            System.out.println("deserialize JSON:"+(System.currentTimeMillis()-time));
             time=System.currentTimeMillis();
+
             byte[] result = serialize.serialize(obj,true);
-            System.out.println("BJSON:"+(System.currentTimeMillis()-time));
+
+            System.out.println("serialize BJSON:"+(System.currentTimeMillis()-time));
 
             writeFile("test.bj",result);
             BjsonDeserialize deserialize = new BjsonDeserialize();
 
             time=System.currentTimeMillis();
             Object object=deserialize.deserialize(result);
-            System.out.println("BJSON:"+(System.currentTimeMillis()-time));
+            System.out.println("deserialize BJSON:"+(System.currentTimeMillis()-time));
 
             JSONWriter writer=new JSONWriter();
 
             time=System.currentTimeMillis();
             String dst=writer.write(object);
-            System.out.println("JSON:"+(System.currentTimeMillis()-time));
+            System.out.println("serialize JSON:"+(System.currentTimeMillis()-time));
 
             writeFile("test.bj.json",dst.getBytes("UTF-8"));
 
+            time=System.currentTimeMillis();
+            for (int i=0;i<1000;i++){
+                reader.read(str);
+            }
+            System.out.println("read JSON:"+(System.currentTimeMillis()-time));
+
+            time=System.currentTimeMillis();
+            for (int i=0;i<1000;i++){
+                serialize.serialize(obj, false);
+            }
+            System.out.println("serialize JSON:"+(System.currentTimeMillis()-time));
+
+            time=System.currentTimeMillis();
+            for (int i=0;i<1000;i++){
+                deserialize.deserialize(result);
+            }
+            System.out.println("deserialize JSON:"+(System.currentTimeMillis()-time));
+
+            time=System.currentTimeMillis();
+            for (int i=0;i<1000;i++){
+                writer.write(object);
+            }
+            System.out.println("write JSON:"+(System.currentTimeMillis()-time));
+
+//            BjsonSerialize serialize = new BjsonSerialize(KeyMapFactory.mutableKeyMap());
+//            byte[] b = serialize.writeUInt(1,6);
+//            BjsonDeserialize deserialize = new BjsonDeserialize();
+//            int k=deserialize.readUInt(b,new BjsonDeserialize.IndexPath(0),5);
 
 
 //            BjsonSerialize serialize = new BjsonSerialize(KeyMapFactory.mutableKeyMap());
@@ -58,7 +88,6 @@ public class Test {
 //            BjsonDeserialize deserialize = new BjsonDeserialize();
 //            deserialize.keyMap=serialize.keyMap;
 //            Map<String,Object> s=deserialize.deserializeMap(b, new BjsonDeserialize.IndexPath(0));
-//            Set<String> keys=s.keySet();
 
             System.out.println("run finish");
         }catch (Exception e){

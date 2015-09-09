@@ -40,34 +40,14 @@ public class BjsonSerialize {
         byte[] content=serializeObject(in);
         if (withKeyMap) {
             byte[] key = keyMap.serializeKeyMap().getBytes("UTF-8");
-            int tailLen = key.length - 63 ;
-            byte[] ret = null;
-            if (tailLen>0){
-                byte[] bLen = writeUInt(tailLen);
-                ret=new byte[bLen.length+1];
-                ret[0]=(byte)255;
-                System.arraycopy(bLen,0,ret,1,bLen.length);
-            }else {
-                ret = new byte[1];
-                ret[0] = (byte) (1<<7 | key.length);
-
-            }
+            byte[] ret = writeUInt(key.length,7);
+            ret[0]=(byte) ( ret[0] | (1<<7));
             out.write(ret);
             out.write(key);
             out.write(content);
         }else {
             int group=keyMap.getKeyMapGroupID();
-            int tailLen = group - 63 ;
-            byte[] ret = null;
-            if (tailLen>0){
-                byte[] bLen = writeUInt(tailLen);
-                ret=new byte[bLen.length+1];
-                ret[0]=(byte)255;
-                System.arraycopy(bLen,0,ret,1,bLen.length);
-            }else {
-                ret = new byte[1];
-                ret[0] = (byte)group;
-            }
+            byte[] ret = writeUInt(group,7);
             out.write(ret);
             out.write(content);
         }
@@ -76,98 +56,109 @@ public class BjsonSerialize {
         return result;
     }
 
-    private byte[] writeUInt(int param){
-
-        int headLen=param/127+(param%127==0?0:1);
-        byte[] ret=new byte[headLen==0?1:headLen];
-        int curPos=0;
-        try {
-            while (true){
-                if (param>127){
-                    ret[curPos]= (byte)-127;
-                    param-=127;
-                    curPos++;
-                }else {
-                    ret[curPos]=(byte)param;
-                    curPos++;
+    public byte[] writeUInt(int param,int firstByteLen){
+        if (param==0){
+            byte[] b=new byte[1];
+            b[0]=0;
+            return b;
+        }
+        int one = 16;
+        int possible = 16;
+        int posBit=31;
+        while (one>0&&one<32){
+            if (((param << one) >>> one)==param ){
+                if ( one+1==32 || ((param << (one+1)) >>> (one+1))!=param){
+                    posBit=one;
                     break;
+                }else {
+                    possible=possible/2;
+                    one += (possible==0?1:possible);
+                }
+            }else {
+                if (((param << (one-1)) >>> (one-1))==param){
+                    posBit=one-1;
+                    break;
+                }else {
+                    possible=possible/2;
+                    one -= (possible==0?1:possible);
                 }
             }
-        }catch (Throwable e){
-            e.printStackTrace();
         }
-
+        int bitLen = 32-(firstByteLen-1)-posBit;
+        bitLen=bitLen>0?bitLen:0;
+        int len = bitLen/7+(bitLen%7==0?0:1)+1;
+        byte[] ret=new byte[len];
+        if (len==1){
+            ret[0]= (byte)param;
+        }else {
+            for (int i=len-1;i>=0;i--){
+                if (i==0){
+                    ret[i]=(byte)  ((param >>> ((len-1)*7)) | (1<<(firstByteLen-1)) );
+                }else if (i == (len-1)){
+                    ret[i]=(byte) ( ((param<<(32-(len-i)*7)) >>> (32-7)));
+                }else {
+                    ret[i]=(byte)( ((param<<(32-(len-i)*7)) >>> (32-7)) | (1<<7) ) ;
+                }
+            }
+        }
         return ret;
+
+
+//        byte[] ret=new byte[4];
+//        int curPos=0;
+//        while (true){
+//            int temp = param & 0x7F;
+//            param = param>>7;
+//            if (param==0){
+//                ret[curPos]=(byte)temp;
+//                break;
+//            }else {
+//                temp = temp | 0x80 ;
+//                ret[curPos]=(byte)temp;
+//                curPos++;
+//            }
+//        }
+//        byte[] result = new byte[curPos+1];
+//        for (int i=0;i<curPos+1;i++){
+//            result[i]=ret[curPos-i];
+//        }
+//        return result;
     }
 
     private byte[] serializeString(String in) throws UnsupportedEncodingException {
         byte[] b=in.getBytes("UTF-8");
-        int tailLen = b.length - 15 ;
-        byte[] ret= null;
-        if (tailLen>0){
-            byte[] bLen = writeUInt(tailLen);
-            ret = new byte[b.length+bLen.length+1];
-            ret[0] = (byte)(176 | 15);
-            System.arraycopy(bLen,0,ret,1,bLen.length);
-            System.arraycopy(b,0,ret,1+bLen.length,b.length);
-        }else {
-            ret=new byte[b.length+1];
-            ret[0] = (byte) (160 | b.length);
-            System.arraycopy(b,0,ret,1,b.length);
-        }
+        byte[] bLen = writeUInt(b.length,5);
+        byte[] ret = new byte[b.length+bLen.length];
+        bLen[0] = (byte)(bLen[0] | 0xA0);
+        System.arraycopy(bLen,0,ret,0,bLen.length);
+        System.arraycopy(b,0,ret,bLen.length,b.length);
         return ret;
     }
 
     private byte[] serializeByteArray(byte[] in) throws UnsupportedEncodingException {
-        int tailLen = in.length - 15 ;
-        byte[] ret= null;
-        if (tailLen>0){
-            byte[] bLen = writeUInt(tailLen);
-            ret = new byte[in.length+bLen.length+1];
-            ret[0] = (byte)(144 | 15);
-            System.arraycopy(bLen,0,ret,1,bLen.length);
-            System.arraycopy(in,0,ret,1+bLen.length,in.length);
-        }else {
-            ret=new byte[in.length+1];
-            ret[0] = (byte) (128 | in.length);
-            System.arraycopy(in,0,ret,1,in.length);
-        }
+        byte[] bLen = writeUInt(in.length,5);
+        byte[] ret = new byte[in.length+bLen.length];
+        bLen[0] = (byte)(bLen[0] | 0x80);
+        System.arraycopy(bLen,0,ret,0,bLen.length);
+        System.arraycopy(in,0,ret,bLen.length,in.length);
         return ret;
     }
 
-
     private byte[] serializeNumber(Number in) throws UnsupportedEncodingException {
         byte[] b=String.valueOf(in).getBytes("UTF-8");
-        int tailLen = b.length - 31 ;
-        byte[] ret = null;
-        if (tailLen>0){
-            byte[] bLen = writeUInt(tailLen);
-            ret=new byte[b.length+bLen.length+1];
-            ret[0] = (byte)255;
-            System.arraycopy(bLen,0,ret,1,bLen.length);
-            System.arraycopy(b,0,ret,1+bLen.length,b.length);
-        }else {
-            ret=new byte[b.length+1];
-            ret[0] = (byte)(192 | b.length);
-            System.arraycopy(b,0,ret,1,b.length);
-        }
+        byte[] bLen = writeUInt(b.length,6);
+        byte[] ret=new byte[b.length+bLen.length];
+        bLen[0] = (byte)(bLen[0] | 0xC0);
+        System.arraycopy(bLen,0,ret,0,bLen.length);
+        System.arraycopy(b,0,ret,bLen.length,b.length);
         return ret;
     }
 
 
     private byte[] serializeArray(Collection obj) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        int tailLen = obj.size() - 31 ;
-        byte[] ret=null;
-        if (tailLen>0){
-            byte[] bLen = writeUInt(tailLen);
-            ret = new byte[bLen.length+1];
-            ret[0] = (byte)127;
-            System.arraycopy(bLen,0,ret,1,bLen.length);
-        }else {
-            ret = new byte[1];
-            ret[0] = (byte) (64 | obj.size());
-        }
+        byte[] ret = writeUInt(obj.size(),6);
+        ret[0] = (byte)(0x40 | ret[0]);
         out.write(ret);
         for (Object one : obj){
             byte[] temp = serializeObject(one);
@@ -183,17 +174,7 @@ public class BjsonSerialize {
 
     private byte[] serializeMap(Map<String,Object> obj) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        int tailLen = obj.size() - 31 ;
-        byte[] ret = null;
-        if (tailLen>0){
-            byte[] bLen = writeUInt(tailLen);
-            ret = new byte[bLen.length+1];
-            ret[0] = (byte)63;
-            System.arraycopy(bLen,0,ret,1,bLen.length);
-        }else {
-            ret = new byte[1];
-            ret[0] =(byte)obj.size();
-        }
+        byte[] ret = writeUInt(obj.size(),6);
         out.write(ret);
         Set<String> keys = obj.keySet();
         for (String k : keys){
@@ -206,7 +187,7 @@ public class BjsonSerialize {
             if (temp == null){
                 continue;
             }
-            byte[] bLen = writeUInt(key);
+            byte[] bLen = writeUInt(key,8);
             out.write(bLen);
             out.write(temp);
         }
